@@ -1,6 +1,7 @@
 import logfire
 from langchain_openai import ChatOpenAI
 from nemoguardrails import RailsConfig, LLMRails
+from nemoguardrails.rails.llm.config import Model
 
 from app.config import settings
 from app.gateway.client import get_langchain_llm
@@ -13,8 +14,8 @@ _rails: LLMRails | None = None
 def initialize_rails() -> None:
     """
     Build the NeMo LLMRails singleton at app startup.
-    Uses llama-3.1-8b-instant or Portkey gateway for intent classification.
-    Safely logs a warning if keys are missing instead of crashing server startup.
+    Uses the configured LLM and remote Gemini embeddings for intent classification.
+    Initialization errors keep the service closed to requests.
     """
     global _rails
 
@@ -33,6 +34,14 @@ def initialize_rails() -> None:
             colang_content=COLANG_CONTENT,
             yaml_content=YAML_CONTENT
         )
+        # NeMo otherwise downloads a local FastEmbed model on the first query.
+        # Its ONNX session can exceed the shared 512 MB web-service budget.
+        # Keep semantic intent matching and every Colang flow, using the same
+        # remote embedding provider that already processes retrieval queries.
+        config.models.append(Model(
+            type="embeddings", engine="google", model=settings.EMBEDDING_MODEL,
+            parameters={"api_key": settings.GEMINI_API_KEY},
+        ))
 
         _rails = LLMRails(config, llm=guard_llm)
         logfire.info("🛡️ NeMo Guardrails initialised.")
