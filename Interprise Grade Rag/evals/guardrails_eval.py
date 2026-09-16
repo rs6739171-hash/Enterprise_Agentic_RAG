@@ -5,12 +5,14 @@ Classifies each result as TP / TN / FP / FN and computes precision + recall.
 """
 
 
+import uuid
+import os
 import time
 import copy
 import requests
 import logfire
 
-API_URL = "http://localhost:8000/query"
+API_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8000").rstrip("/") + "/query"
 
 
 def _is_blocked(response_json: dict) -> bool:
@@ -40,7 +42,7 @@ def run_guardrails_eval(guardrails_samples: list, progress_callback=None) -> lis
                 try:
                     resp = requests.post(
                         API_URL,
-                        json={"q": sample["input"], "thread_id": f"guardrail_eval_{i}"},
+                        json={"q": sample["input"], "thread_id": str(uuid.uuid4())},
                         timeout=30,
                     )
                     resp.raise_for_status()

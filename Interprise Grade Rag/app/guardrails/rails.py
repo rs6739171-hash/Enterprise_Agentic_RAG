@@ -22,13 +22,12 @@ def initialize_rails() -> None:
         if settings.OPENAI_API_KEY:
             guard_llm = ChatOpenAI(
                 api_key=settings.OPENAI_API_KEY,
-                model="gpt-5.5"
+                model=settings.OPENAI_MODEL, timeout=60, max_retries=2
             )
         elif settings.PORTKEY_API_KEY:
             guard_llm = get_langchain_llm(feature="guardrails")
         else:
-            logfire.warning("⚠️ Neither GROQ_API_KEY nor PORTKEY_API_KEY set — skipping guardrails initialization.")
-            return
+            raise RuntimeError("Guardrails require OPENAI_API_KEY or PORTKEY_API_KEY.")
 
         config = RailsConfig.from_content(
             colang_content=COLANG_CONTENT,
@@ -38,8 +37,8 @@ def initialize_rails() -> None:
         _rails = LLMRails(config, llm=guard_llm)
         logfire.info("🛡️ NeMo Guardrails initialised.")
     except Exception as e:
-        logfire.warning(f"⚠️ Guardrails initialization deferred/failed: {e}")
         _rails = None
+        raise RuntimeError("Guardrails initialization failed; requests are disabled.") from e
     
     
 
@@ -54,8 +53,7 @@ def guard(message: str) -> tuple[bool, str | None]:
         (False, None)          — message is clean; proceed to LangGraph.
     """
     if _rails is None:
-        logfire.warning("⚠️ Guardrails not initialised — skipping gate.")
-        return False, None
+        raise RuntimeError("Guardrails are unavailable; requests are disabled.")
 
     with logfire.span("🛡️ Guardrails Check"):
         result = _rails.generate(messages=[{"role": "user", "content": message}])

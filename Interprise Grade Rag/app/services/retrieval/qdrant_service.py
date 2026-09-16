@@ -1,3 +1,4 @@
+from functools import lru_cache
 import logfire
 from qdrant_client import QdrantClient
 from app.config import settings
@@ -5,10 +6,10 @@ from app.services.retrieval.embeddings import embed_query
 
 
 # Initialize Qdrant Client
-client = QdrantClient(
-    url=settings.QDRANT_URL,
-    api_key=settings.QDRANT_API_KEY
-)
+@lru_cache(maxsize=1)
+def get_client():
+    return QdrantClient(url=settings.QDRANT_URL, api_key=settings.QDRANT_API_KEY, timeout=30)
+
 
 def search_enterprise_knowledge(query: str, limit: int = 8):
     """
@@ -19,7 +20,7 @@ def search_enterprise_knowledge(query: str, limit: int = 8):
         query_vector = embed_query(query)
 
         # Using query_points - the modern standard for Qdrant
-        response = client.query_points(
+        response = get_client().query_points(
             collection_name=settings.QDRANT_COLLECTION,
             query=query_vector,
             limit=limit,
@@ -38,4 +39,4 @@ def search_enterprise_knowledge(query: str, limit: int = 8):
         return results
     except Exception as e:
         logfire.error(f"❌ Qdrant Search Failed: {e}")
-        return []
+        raise RuntimeError("Knowledge retrieval is temporarily unavailable.") from e

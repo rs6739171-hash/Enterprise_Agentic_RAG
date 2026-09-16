@@ -1,0 +1,33 @@
+services:
+  - type: web
+    name: enterprise-rag-rishabh
+    runtime: python
+    plan: free
+    rootDir: "Interprise Grade Rag"
+    buildCommand: pip install -r requirements-runtime.txt
+    startCommand: python serve.py
+    healthCheckPath: /_stcore/health
+    autoDeployTrigger: off
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13.5"
+      - key: APP_PASSWORD
+        generateValue: true
+      - key: PORTKEY_API_KEY
+        sync: false
+      - key: GEMINI_API_KEY
+        sync: false
+      - key: QDRANT_CLUSTER_ENDPOINT
+        sync: false
+      - key: QDRANT_API_KEY
+        sync: false
+      - key: OPENAI_MODEL
+        value: "gpt-5.5"
+      - key: PORTKEY_PRIMARY_SLUG
+        value: "rag1"
+      - key: QDRANT_COLLECTION
+        value: "enterprise_rag"
+      - key: EMBEDDING_MODEL
+        value: "models/gemini-embedding-2-preview"
+      - key: EMBEDDING_DIM
+        value: "3072"

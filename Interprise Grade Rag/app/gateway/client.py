@@ -1,3 +1,4 @@
+from functools import lru_cache
 import logfire
 from portkey_ai import Portkey, createHeaders, PORTKEY_GATEWAY_URL
 from langchain_openai import ChatOpenAI
@@ -17,16 +18,21 @@ GATEWAY_CONFIG = {
         "on_status_codes": [429, 503]
     },
     "targets": [
-        {"override_params": {"model": f"@{settings.GPT_SLUG}/gpt-5.5"}},
-        {"override_params": {"model": f"@{settings.GPT_SLUG_2}/gpt-5.5"}},
+        {"override_params": {"model": f"@{settings.GPT_SLUG}/{settings.OPENAI_MODEL}"}},
+
     ]
 }
 
-portkey_api_key = settings.PORTKEY_API_KEY
+if settings.GPT_SLUG_2:
+    GATEWAY_CONFIG["targets"].append({
+        "override_params": {"model": f"@{settings.GPT_SLUG_2}/{settings.OPENAI_MODEL}"}
+    })
 
-portkey_client = Portkey(
-    api_key=portkey_api_key
-)
+
+@lru_cache(maxsize=1)
+def get_portkey_client():
+    return Portkey(api_key=settings.PORTKEY_API_KEY, config=GATEWAY_CONFIG, timeout=60)
+
 
 
 def get_langchain_llm(feature: str = "rishu3") -> ChatOpenAI:
@@ -42,10 +48,13 @@ def get_langchain_llm(feature: str = "rishu3") -> ChatOpenAI:
     api_key = settings.PORTKEY_API_KEY
     return ChatOpenAI(
         api_key=api_key,
+        timeout=60,
+        max_retries=2,
         base_url=PORTKEY_GATEWAY_URL,
         model=f"@{settings.GPT_SLUG}/{settings.OPENAI_MODEL}",
         default_headers=createHeaders(
             api_key=api_key,
+            config=GATEWAY_CONFIG,
             metadata={
                 "feature": feature,
                 "_user": "rag-system",

@@ -36,3 +36,9 @@ A production-grade, enterprise-level RAG system built with **LangGraph**, **Port
 ├── DATA/                # Sample datasets (True vs Noisy documentation)
 └── requirements.txt     # Pinned dependencies
 ```
+
+
+
+## Reviewed deployment setup
+
+See [DEPLOYMENT_REVIEW.md](DEPLOYMENT_REVIEW.md) for the review findings, required secrets, hosting setup, verification limits, and remaining work. The Render blueprint is [render.yaml](render.yaml).

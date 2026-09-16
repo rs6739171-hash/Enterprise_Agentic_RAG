@@ -4,7 +4,7 @@ from langchain_google_genai import GoogleGenerativeAIEmbeddings
 from app.config import settings
 
 BATCH_SIZE = 50
-GEMINI_DIM = 3072
+GEMINI_DIM = settings.EMBEDDING_DIM
 FALLBACK_DIM = 768
 
 active_model = None
@@ -15,16 +15,17 @@ def probe_gemini():
     """Try one embed call to verify Gemini is reachable. Return model or None."""
     try:
         model = GoogleGenerativeAIEmbeddings(
-            model="models/gemini-embedding-2-preview",
+            model=settings.EMBEDDING_MODEL,
             google_api_key=settings.GEMINI_API_KEY,
         )
-        model.embed_query("probe")
+        vector = model.embed_query("probe")
+        if len(vector) != GEMINI_DIM:
+            raise RuntimeError("Embedding dimensions do not match EMBEDDING_DIM.")
         logfire.info("Gemini Embeddings are active", dims=3072, model="google/gemini-embedding-2-preview")
         return model
 
     except Exception as e:
-        logfire.warning(f"Gemini Probe Failed: {e}. We will use sentence transformers fallback.")
-        return None
+        raise RuntimeError("Gemini embeddings unavailable; the embedding model was not changed.") from e
 
 def load_fallback():
     from sentence_transformers import SentenceTransformer
@@ -36,13 +37,14 @@ def init():
     global active_model, model_type
     if active_model is not None:
         return
-    gemini = probe_gemini()
-    if gemini:
-        active_model = gemini
+    if settings.EMBEDDING_BACKEND == "gemini":
+        active_model = probe_gemini()
         model_type = "gemini"
-    else:
+    elif settings.EMBEDDING_BACKEND == "sentence-transformers":
         active_model = load_fallback()
         model_type = "fallback"
+    else:
+        raise RuntimeError("Unsupported embedding backend.")
 
 # Public Helpers
 def get_embedding_dim() -> int:
@@ -56,6 +58,7 @@ def get_embedding_dim() -> int:
 # Batch embedding with retry
 def embed_batch(batch: list[str]) -> list[list[float]]:
     """Generate embeddings for a list of texts with exponential backoff retry. Safe for large batches."""
+    init()
     if model_type == "gemini":
         # exponential backoff, 4 attempts
         for attempt in range(4):
