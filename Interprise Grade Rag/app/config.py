@@ -27,12 +27,15 @@ def validate_settings() -> None:
     required = {
         "QDRANT_CLUSTER_ENDPOINT": settings.QDRANT_URL,
         "QDRANT_API_KEY": settings.QDRANT_API_KEY,
-        "PORTKEY_API_KEY": settings.PORTKEY_API_KEY,
     }
     if settings.EMBEDDING_BACKEND == "gemini":
         required["GEMINI_API_KEY"] = settings.GEMINI_API_KEY
     elif settings.EMBEDDING_BACKEND != "sentence-transformers":
         raise RuntimeError("EMBEDDING_BACKEND must be gemini or sentence-transformers.")
+
     missing = [name for name, value in required.items() if not value]
     if missing:
         raise RuntimeError("Missing required environment variables: " + ", ".join(missing))
+
+    if not settings.OPENAI_API_KEY and not settings.PORTKEY_API_KEY:
+        raise RuntimeError("Configure OPENAI_API_KEY or PORTKEY_API_KEY for LLM access.")
