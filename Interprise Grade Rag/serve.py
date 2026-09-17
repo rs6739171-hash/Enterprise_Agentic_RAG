@@ -24,8 +24,16 @@ def main():
     env["PYTHONPATH"] = str(PROJECT) + os.pathsep + env.get("PYTHONPATH", "")
     env["BACKEND_URL"] = "http://127.0.0.1:8000"
     children = []
+    probe = None
 
     def stop(signum=None, frame=None):
+        if probe is not None and probe.poll() is None:
+            probe.terminate()
+            try:
+                probe.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                probe.kill()
+                probe.wait()
         for child in children:
             if child.poll() is None:
                 child.terminate()
@@ -62,6 +70,9 @@ def main():
         children.append(subprocess.Popen([sys.executable, "-m", "streamlit", "run", UI,
             "--server.address", "0.0.0.0", "--server.port", os.getenv("PORT", "8501"),
             "--server.headless", "true", "--browser.gatherUsageStats", "false"], cwd=PROJECT, env=env))
+        if os.getenv("RAG_VERIFY_ON_START") == "1":
+            # This short-lived probe is not a public route and logs no answer text.
+            probe = subprocess.Popen([sys.executable, "verify_deployment.py"], cwd=PROJECT, env=env)
         while all(child.poll() is None for child in children):
             time.sleep(0.5)
         raise RuntimeError("An application process stopped; restarting the service is required.")

@@ -11,6 +11,19 @@ LOG = SimpleNamespace(info=lambda *a, **k: None, warning=lambda *a, **k: None,
 
 
 class RagRegressions(unittest.TestCase):
+    def test_error_diagnostics_keep_status_without_secret_or_prompt(self):
+        import re
+        import traceback
+        ns = functions_from(APP / "app/diagnostics.py", re=re, traceback=traceback)
+        exc = RuntimeError("secret-key and private prompt")
+        exc.status_code = 401
+        exc.body = {"error": {"code": "invalid_api_key", "message": "secret-key"}}
+        details = ns["safe_error_details"](exc)
+        self.assertEqual(details["provider_status"], 401)
+        self.assertEqual(details["provider_code"], "invalid_api_key")
+        self.assertNotIn("secret-key", str(details))
+        self.assertNotIn("private prompt", str(details))
+
     def test_missing_guardrails_fail_closed(self):
         ns = functions_from(APP / "app/guardrails/rails.py", _rails=None, logfire=LOG)
         with self.assertRaises(RuntimeError): ns["guard"]("technical question")

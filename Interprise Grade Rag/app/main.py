@@ -1,5 +1,6 @@
 import os
 import uuid
+import json
 from contextlib import asynccontextmanager
 import logfire
 from dotenv import load_dotenv
@@ -11,6 +12,7 @@ logfire.configure(token=os.getenv("LOGFIRE_TOKEN"), send_to_logfire="if-token-pr
 from app.config import validate_settings
 from app.agents.graph import rag_agent
 from app.guardrails.rails import initialize_rails, guard
+from app.diagnostics import safe_error_details
 
 
 @asynccontextmanager
@@ -66,7 +68,8 @@ def query(request: QueryRequest):
                 "thought_process": result.get("plan"), "status": result.get("status"),
                 "sources": result.get("documents", [])}
     except Exception as exc:
-        logfire.error("RAG request failed", error_type=type(exc).__name__)
+        # Include safe fields in the message so Render's text logs retain them.
+        logfire.error("RAG request failed: " + json.dumps(safe_error_details(exc)))
         raise HTTPException(status_code=503, detail="The AI or knowledge service is temporarily unavailable.") from exc
 
 
