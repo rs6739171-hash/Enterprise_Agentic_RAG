@@ -2,7 +2,7 @@ from app.agents.state import AgentState
 from app.gateway.client import get_langchain_llm
 import logfire
 
-# Portkey-backed LLM: fallback + cache + retry — same .invoke() interface as ChatGroq
+# Portkey-backed LLM; gateway policies are managed by the saved/API-key config.
 
 
 def planner_node(state: AgentState):

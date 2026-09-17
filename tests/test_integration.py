@@ -6,6 +6,29 @@ from unittest.mock import patch
 
 @unittest.skipUnless(importlib.util.find_spec("langgraph"), "Runtime dependencies are not installed")
 class ApiIntegration(unittest.TestCase):
+    def test_clients_respect_server_managed_portkey_config(self):
+        sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "Interprise Grade Rag"))
+        from types import SimpleNamespace
+        import app.gateway.client as gateway
+        for config_id in ("", "pc-saved-config"):
+            with self.subTest(config_id=config_id):
+                settings = SimpleNamespace(PORTKEY_API_KEY="test", GPT_SLUG="rag1",
+                    OPENAI_MODEL="gpt-5.5", PORTKEY_CONFIG_ID=config_id)
+                gateway.get_portkey_client.cache_clear()
+                with patch.object(gateway, "settings", settings), \
+                     patch.object(gateway, "Portkey") as native_constructor:
+                    llm = gateway.get_langchain_llm()
+                    gateway.get_portkey_client()
+                headers = llm.default_headers
+                if config_id:
+                    self.assertEqual(headers.get("x-portkey-config"), config_id)
+                    self.assertEqual(native_constructor.call_args.kwargs["config"], config_id)
+                else:
+                    self.assertNotIn("x-portkey-config", headers)
+                    self.assertNotIn("config", native_constructor.call_args.kwargs)
+                self.assertEqual(llm.model_name, "@rag1/gpt-5.5")
+        gateway.get_portkey_client.cache_clear()
+
     def test_guardrails_select_remote_embeddings_without_loading_local_model(self):
         sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "Interprise Grade Rag"))
         from types import SimpleNamespace

@@ -14,7 +14,7 @@ class Settings:
     LOGFIRE_TOKEN = os.getenv("LOGFIRE_TOKEN")
     PORTKEY_API_KEY = os.getenv("PORTKEY_API_KEY") or os.getenv("PORTKEY_API")
     GPT_SLUG = os.getenv("PORTKEY_PRIMARY_SLUG", "rag1")
-    GPT_SLUG_2 = os.getenv("PORTKEY_FALLBACK_SLUG", "")
+    PORTKEY_CONFIG_ID = os.getenv("PORTKEY_CONFIG_ID", "").strip()
     EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "models/gemini-embedding-2-preview")
     EMBEDDING_BACKEND = os.getenv("EMBEDDING_BACKEND", "gemini")
     EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "3072"))

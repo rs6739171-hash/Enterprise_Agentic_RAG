@@ -69,7 +69,7 @@ def query(request: QueryRequest):
                 "sources": result.get("documents", [])}
     except Exception as exc:
         # Include safe fields in the message so Render's text logs retain them.
-        logfire.error("RAG request failed: " + json.dumps(safe_error_details(exc)))
+        logfire.error("RAG request failed: {details}", details=json.dumps(safe_error_details(exc)))
         raise HTTPException(status_code=503, detail="The AI or knowledge service is temporarily unavailable.") from exc
 
 
