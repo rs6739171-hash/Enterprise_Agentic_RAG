@@ -3,6 +3,7 @@ import contextlib
 from pathlib import Path
 from types import SimpleNamespace
 import unittest
+from unittest.mock import Mock
 from helpers import functions_from
 
 APP = Path(__file__).resolve().parents[1] / "Interprise Grade Rag"
@@ -11,6 +12,45 @@ LOG = SimpleNamespace(info=lambda *a, **k: None, warning=lambda *a, **k: None,
 
 
 class RagRegressions(unittest.TestCase):
+    def test_seed_preserves_an_existing_collection(self):
+        ns = functions_from(APP / "seed_knowledge.py")
+        client = Mock()
+        client.collection_exists.return_value = True
+        client.count.return_value = SimpleNamespace(count=42)
+        embedder = Mock(side_effect=AssertionError("Existing data must not be reembedded"))
+        result = ns["seed_if_missing"](client, "existing", [], embedder, 2, Mock())
+        self.assertEqual(result["point_count"], 42)
+        client.create_collection.assert_not_called()
+        client.upsert.assert_not_called()
+
+    def test_seed_embedding_mismatch_has_no_database_writes(self):
+        ns = functions_from(APP / "seed_knowledge.py")
+        client = Mock()
+        client.collection_exists.return_value = False
+        for vectors in ([], [[0.1]]):
+            with self.subTest(vectors=vectors), self.assertRaises(ValueError):
+                ns["seed_if_missing"](client, "missing", [{"text": "example"}],
+                    lambda text: vectors, 2, Mock())
+        client.create_collection.assert_not_called()
+        client.upsert.assert_not_called()
+
+    def test_seed_new_collection_keeps_text_and_source_metadata(self):
+        ns = functions_from(APP / "seed_knowledge.py")
+        client = Mock()
+        client.collection_exists.return_value = False
+        client.create_collection.return_value = True
+        client.count.return_value = SimpleNamespace(count=1)
+        models = SimpleNamespace(PointStruct=lambda **kw: kw,
+            VectorParams=lambda **kw: kw, Distance=SimpleNamespace(COSINE="Cosine"))
+        result = ns["seed_if_missing"](client, "new", [{"id": "stable-id",
+            "text": "evidence", "source": "manual.txt", "source_type": "true"}],
+            lambda text: [[0.1, 0.2]], 2, models)
+        self.assertEqual(result["action"], "created_and_indexed")
+        self.assertTrue(client.upsert.call_args.kwargs["wait"])
+        point = client.upsert.call_args.kwargs["points"][0]
+        self.assertEqual(point["payload"]["text"], "evidence")
+        self.assertEqual(point["payload"]["source"], "manual.txt")
+
     def test_error_diagnostics_keep_status_without_secret_or_prompt(self):
         import re
         import traceback

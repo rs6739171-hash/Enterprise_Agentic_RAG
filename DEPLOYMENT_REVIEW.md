@@ -20,6 +20,8 @@ Reviewed baseline: `86287a53c756f122a0ee11eb4f202928fe60f5d4`.
 
 Set `OPENAI_MODEL`, `EMBEDDING_MODEL`, `EMBEDDING_DIM`, and `QDRANT_COLLECTION` to the actual deployed services. Existing model defaults are preserved; their availability and your access have not been verified. The Qdrant collection must already exist, contain your documents, and use the same embedding model/dimensions. Changing an embedding model requires rebuilding an appropriate collection; no existing data was deleted or reindexed. For first-time ingestion in a configured environment, install the full requirements and run `python -m app.ingestion.processor DATA` without `--wipe`.
 
+For the prepared JSON chunks already tracked under `processed_data`, `python seed_knowledge.py` creates the configured collection only if it is missing and indexes those chunks with the configured embedding model. An existing collection is never overwritten. Set `RAG_SEED_IF_MISSING=1` for a one-time Render startup setup, then return it to `0`. Setup runs before the web processes to avoid overlapping their memory use. `RAG_VERIFY_ON_START=1` optionally runs one local question after startup and logs only a result summary; return it to `0` after verification.
+
 Render uses root directory `Interprise Grade Rag`, `pip install -r requirements-runtime.txt`, and `python serve.py`. The serving requirements exclude the separate evaluation/ingestion stack. NeMo's and FlashRank's local model dependencies can exceed free-tier memory; the free plan in this blueprint is an initial build target, not a verified capacity recommendation.
 
 ## Remaining limitations

@@ -49,6 +49,10 @@ def main():
     signal.signal(signal.SIGTERM, stop)
     signal.signal(signal.SIGINT, stop)
     try:
+        if os.getenv("RAG_SEED_IF_MISSING") == "1":
+            # Finish this one-time job before loading the API and UI into memory.
+            subprocess.run([sys.executable, "seed_knowledge.py"], cwd=PROJECT,
+                env=env, check=True, timeout=300)
         if API:
             backend = subprocess.Popen([sys.executable, "-m", "uvicorn", API,
                 "--host", "127.0.0.1", "--port", "8000", "--workers", "1"], cwd=PROJECT, env=env)
