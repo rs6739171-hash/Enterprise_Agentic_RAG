@@ -1,0 +1,16 @@
+# Serving dependencies only. Existing requirements.txt retains ingestion/evaluation tools.
+fastapi>=0.115,<1
+uvicorn>=0.30,<1
+python-dotenv>=1,<2
+requests>=2.32,<3
+streamlit>=1.50,<2
+langgraph>=1,<2
+langchain-openai>=1,<2
+langchain-google-genai>=4,<5
+qdrant-client>=1.14,<2
+flashrank>=0.2,<0.3
+logfire[fastapi,requests]>=4,<5
+nemoguardrails>=0.23,<1
+langchain-google-vertexai>=3,<4
+langchain-nvidia-ai-endpoints>=1,<2
+portkey-ai>=2,<3

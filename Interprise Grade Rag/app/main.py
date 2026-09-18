@@ -1,116 +1,89 @@
-import sys
-
-# Ensure UTF-8 output encoding on Windows to prevent UnicodeEncodeError in Logfire console output
-if sys.platform == "win32":
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-    if hasattr(sys.stderr, "reconfigure"):
-        sys.stderr.reconfigure(encoding="utf-8", errors="replace")
-
-# ============================================================
-# CRITICAL: logfire MUST be configured before ALL other imports
-# so that spans from all modules are captured from the start.
-# ============================================================
-import logfire
 import os
+import uuid
+import json
+import threading
+from typing import Literal
+from contextlib import asynccontextmanager
+import logfire
 from dotenv import load_dotenv
+from fastapi import FastAPI, HTTPException, Response
+from pydantic import BaseModel, Field
 
 load_dotenv()
-logfire.configure(token=os.getenv("LOGFIRE_TOKEN"))
-
-# Now safe to import app modules - logfire is already active
-from fastapi import FastAPI, Response
+logfire.configure(token=os.getenv("LOGFIRE_TOKEN"), send_to_logfire="if-token-present")
+from app.config import validate_settings
 from app.agents.graph import rag_agent
 from app.guardrails.rails import initialize_rails, guard
-
-from pydantic import BaseModel
-from typing import Optional
-
-
-# Initialize FastAPI
-app = FastAPI(title="Enterprise Agentic RAG API")
+from app.diagnostics import safe_error_details
+from evals.routes import router as evaluation_router
+from evals.hosted import startup_evaluation
 
 
-@app.on_event("startup")
-def startup_event():
+@asynccontextmanager
+async def lifespan(app):
+    validate_settings()
     initialize_rails()
+    startup_evaluation()
+    yield
+
+
+app = FastAPI(title="Enterprise Agentic RAG API", lifespan=lifespan)
+app.include_router(evaluation_router)
+_query_lock = threading.Lock()
+
 
 class QueryRequest(BaseModel):
-    q: str
-    thread_id: Optional[str] = "default_user"
-    
-    
+    q: str = Field(min_length=1, max_length=8000, pattern=r"\S")
+    # Omitted thread IDs must never share another visitor's history.
+    thread_id: uuid.UUID = Field(default_factory=uuid.uuid4)
+    retrieval_mode: Literal["reranked", "vector"] = "reranked"
+
+
 @app.get("/")
 def home():
     return {"message": "Enterprise LangGraph RAG API is live."}
 
 
+@app.get("/health")
+def health():
+    return {"status": "healthy"}
+
+
 @app.get("/graph")
-def get_graph_image():
-    """
-    Returns the Mermaid image of the agent's workflow.
-    """
+def graph_image():
     try:
-        png_bytes = rag_agent.get_graph().draw_mermaid_png()
-        return Response(content=png_bytes, media_type="image/png")
-    except Exception as e:
-        return {"error": f"Could not generate graph image: {e}"}
-    
-    
+        return Response(content=rag_agent.get_graph().draw_mermaid_png(), media_type="image/png")
+    except Exception as exc:
+        raise HTTPException(status_code=503, detail="Graph image unavailable.") from exc
+
+
 @app.post("/query")
 def query(request: QueryRequest):
-    """
-    Executes the LangGraph RAG flow with memory using a POST request.
-    """
-    q = request.q
-    thread_id = request.thread_id
-
-    initial_state = {
-        "messages": [{"role": "user", "content": q}],
-        "current_query": q,
-        "documents": [],
-        "plan": ["Start"],
-        "status": "Initializing Graph..."
-    }
-    
-    # Configuration for Memory (Thread ID)
-    config = {"configurable": {"thread_id": thread_id}}
-    
-    try:
-        # Gate 1: NeMo Guardrails — blocks off-topic, jailbreaks, and handles dialog
-        rail_fired, rail_response = guard(q)
-        if rail_fired:
-            logfire.info(f"🛡️ Request blocked by guardrails | thread={thread_id}")
-            return {
-                "question": q,
-                "answer": rail_response,
-                "thought_process": ["Intent: Guardrails Fired", "Retrieval: Skipped"],
-                "status": "Blocked by guardrails.",
-                "sources": []
-            }
-
-        # Gate 2: LangGraph RAG pipeline
-        # Run the graph synchronously to preserve Logfire context variables
-        final_output = rag_agent.invoke(initial_state, config=config)
-        
-        return {
-            "question": q,
-            "answer": final_output.get("final_answer"),
-            "thought_process": final_output.get("plan"),
-            "status": final_output.get("status"),
-            "sources": final_output.get("documents", [])
+    # Bound memory use and serialize NeMo lazy index initialization.
+    with _query_lock:
+        initial_state = {
+            "messages": [{"role": "user", "content": request.q}],
+            "current_query": request.q, "documents": [],
+            "retrieval_mode": request.retrieval_mode,
+            "plan": ["Start"], "status": "Initializing Graph...",
         }
-    except Exception as e:
-        logfire.error(f"❌ Backend Execution Failed: {e}")
-        return {
-            "question": q,
-            "answer": "I apologize, but I encountered an internal error while processing your request. Please try again later.",
-            "thought_process": ["Error encountered during execution."],
-            "status": "error",
-            "sources": []
-        }
+        config = {"configurable": {"thread_id": str(request.thread_id)}}
+        try:
+            fired, response = guard(request.q)
+            if fired:
+                return {"question": request.q, "answer": response,
+                        "thought_process": ["Intent: Guardrails Fired", "Retrieval: Skipped"],
+                        "status": "Handled by guardrails.", "sources": []}
+            result = rag_agent.invoke(initial_state, config=config)
+            return {"question": request.q, "answer": result.get("final_answer"),
+                    "thought_process": result.get("plan"), "status": result.get("status"),
+                    "sources": result.get("documents", [])}
+        except Exception as exc:
+            # Include safe fields in the message so Render's text logs retain them.
+            logfire.error("RAG request failed: {details}", details=json.dumps(safe_error_details(exc)))
+            raise HTTPException(status_code=503, detail="The AI or knowledge service is temporarily unavailable.") from exc
 
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run("app.main:app", host="127.0.0.1", port=8000, reload=True)
+    uvicorn.run("app.main:app", host="127.0.0.1", port=8000)

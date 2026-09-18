@@ -9,6 +9,7 @@ if sys.platform == "win32":
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 import streamlit as st
+from deployment_access import require_access
 import requests
 import time
 import uuid
@@ -30,6 +31,8 @@ st.set_page_config(
     layout="wide",
 )
 
+require_access()
+
 # --- AVATARS ---
 AI_AVATAR = "🤖"
 USER_AVATAR = "👤"
@@ -47,7 +50,7 @@ with st.sidebar:
     st.title("🧠 Agent OS")
     st.markdown("---")
 
-    base_url = "http://localhost:8000"
+    base_url = os.getenv("BACKEND_URL", "http://127.0.0.1:8000").rstrip("/")
 
     st.markdown("---")
     st.success(f"Logfire: {LOGFIRE_STATUS}")
@@ -85,7 +88,8 @@ if prompt := st.chat_input("Ask about your documentation..."):
                     with logfire.span("📡 Calling RAG Backend"):
                         url = f"{base_url}/query"
                         payload = {"q": prompt, "thread_id": st.session_state.session_id}
-                        response = requests.post(url, json=payload, timeout=60)
+                        response = requests.post(url, json=payload, timeout=(10, 240))
+                        response.raise_for_status()
 
                         if response.status_code != 200:
                             st.error(f"Backend Error: {response.status_code} - {response.text}")
@@ -107,7 +111,7 @@ if prompt := st.chat_input("Ask about your documentation..."):
 
             # Answer streaming — outside status so it's always visible
             answer_placeholder = st.empty()
-            full_answer = data.get("answer", "No response.")
+            full_answer = data.get("answer") or "No response."
 
             curr_text = ""
             for char in full_answer:

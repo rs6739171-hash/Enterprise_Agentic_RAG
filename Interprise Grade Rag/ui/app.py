@@ -9,6 +9,7 @@ if sys.platform == "win32":
         sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 import streamlit as st
+from deployment_access import require_access
 import requests
 import time
 import uuid
@@ -41,6 +42,14 @@ st.set_page_config(
     page_icon="🤖",
     layout="wide",
 )
+
+require_access()
+
+page = st.sidebar.radio("Workspace", ["Chat", "Evaluation"])
+if page == "Evaluation":
+    from evals.dashboard import render_dashboard
+    render_dashboard()
+    st.stop()
 
 # --- AVATARS ---
 AI_AVATAR = "🤖"
@@ -99,7 +108,8 @@ if prompt := st.chat_input("Ask about your documentation..."):
                         base_url = os.getenv("BACKEND_URL", "http://localhost:8000")
                         url = f"{base_url}/query"
                         payload = {"q": prompt, "thread_id": st.session_state.session_id}
-                        response = requests.post(url, json=payload, timeout=60)
+                        response = requests.post(url, json=payload, timeout=(10, 240))
+                        response.raise_for_status()
                         data = response.json()
                     
                     # Show Reasoning Steps from Backend

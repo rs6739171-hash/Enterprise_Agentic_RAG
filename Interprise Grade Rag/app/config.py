@@ -3,43 +3,39 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
 class Settings:
     GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-    QDRANT_URL = os.getenv("QDRANT_CLUSTER_ENDPOINT")
+    QDRANT_URL = os.getenv("QDRANT_CLUSTER_ENDPOINT") or os.getenv("QDRANT_URL")
     QDRANT_API_KEY = os.getenv("QDRANT_API_KEY")
-    QDRANT_COLLECTION = "enterprise_rag"
-
-    # NOTE: renamed from GROK_* -> GROQ_* to match the provider name used
-    # everywhere else in the codebase (ChatGroq, GROQ_MODEL, etc).
-    # Update your .env keys to GROQ_API_KEY / GROQ_FALLBACK_API_KEY.
+    QDRANT_COLLECTION = os.getenv("QDRANT_COLLECTION", "enterprise_rag")
     OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
-    OPENAI_FALLBACK_API_KEY = os.getenv("OPENAI_FALLBACK_API_KEY")
-    OPENAI_MODEL = ("gpt-5.5")
-
+    OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-5.5")
     LOGFIRE_TOKEN = os.getenv("LOGFIRE_TOKEN")
     PORTKEY_API_KEY = os.getenv("PORTKEY_API_KEY") or os.getenv("PORTKEY_API")
-    GPT_SLUG = "rag1"
-    GPT_SLUG_2 = "rag2"
-
+    GPT_SLUG = os.getenv("PORTKEY_PRIMARY_SLUG", "rag1")
+    PORTKEY_CONFIG_ID = os.getenv("PORTKEY_CONFIG_ID", "").strip()
+    EMBEDDING_MODEL = os.getenv("EMBEDDING_MODEL", "models/gemini-embedding-2-preview")
+    EMBEDDING_BACKEND = os.getenv("EMBEDDING_BACKEND", "gemini")
+    EMBEDDING_DIM = int(os.getenv("EMBEDDING_DIM", "3072"))
 
 
 settings = Settings()
 
 
 def validate_settings() -> None:
-    """
-    Fail fast at startup instead of deep inside a probe/API call with a
-    confusing stack trace. Call this from main.py's startup event.
-    """
     required = {
-        "GEMINI_API_KEY": settings.GEMINI_API_KEY,
-        "QDRANT_URL": settings.QDRANT_URL,
+        "QDRANT_CLUSTER_ENDPOINT": settings.QDRANT_URL,
         "QDRANT_API_KEY": settings.QDRANT_API_KEY,
-        "OPENAI_API_KEY": settings.OPENAI_API_KEY,
     }
+    if settings.EMBEDDING_BACKEND == "gemini":
+        required["GEMINI_API_KEY"] = settings.GEMINI_API_KEY
+    elif settings.EMBEDDING_BACKEND != "sentence-transformers":
+        raise RuntimeError("EMBEDDING_BACKEND must be gemini or sentence-transformers.")
+
     missing = [name for name, value in required.items() if not value]
     if missing:
-        raise RuntimeError(
-            f"Missing required environment variables: {', '.join(missing)}. "
-            f"Check your .env file."
-        )
+        raise RuntimeError("Missing required environment variables: " + ", ".join(missing))
+
+    if not settings.OPENAI_API_KEY and not settings.PORTKEY_API_KEY:
+        raise RuntimeError("Configure OPENAI_API_KEY or PORTKEY_API_KEY for LLM access.")

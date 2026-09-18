@@ -16,8 +16,8 @@ from app.ingestion.loaders.text import parse_text
 from app.ingestion.loaders.html import parse_html
 from app.ingestion.chunking.splitter import chunk_text
 
-TRUE_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "true_data")
-NOISY_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "data", "noisy_data")
+TRUE_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "DATA", "true_data")
+NOISY_DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), "DATA", "noisy_data")
 NOISY_ALLOWED_EXTS = {".pptx", ".docx", ".txt"}
 
 
@@ -68,7 +68,7 @@ def load_all_chunks() -> list[dict]:
             for chunk in chunk_text(text):
                 results.append({"text": chunk, "source": fname, "is_noise": False})
 
-    for fname in sorted(os.listdir(NOISY_DATA_DIR)):
+    for fname in sorted(os.listdir(NOISY_DATA_DIR)) if os.path.isdir(NOISY_DATA_DIR) else []:
         ext = os.path.splitext(fname)[1].lower()
         if ext not in NOISY_ALLOWED_EXTS:
             continue
