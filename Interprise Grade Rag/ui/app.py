@@ -33,7 +33,6 @@ try:
         LOGFIRE_STATUS = "Standby (No LOGFIRE_TOKEN)"
 except Exception as e:
     LOGFIRE_STATUS = f"Standby ({e})"
-    
 
 
 # --- PAGE CONFIG ---
@@ -45,7 +44,17 @@ st.set_page_config(
 
 require_access()
 
-page = st.sidebar.radio("Workspace", ["Chat", "Evaluation"])
+# A query parameter makes the evaluation dashboard directly bookmarkable:
+# https://<host>/?page=evaluation
+requested_page = str(st.query_params.get("page", "")).strip().lower()
+default_page = "Evaluation" if requested_page in {"evaluation", "eval"} else "Chat"
+page = st.sidebar.radio(
+    "Workspace",
+    ["Chat", "Evaluation"],
+    index=1 if default_page == "Evaluation" else 0,
+)
+st.query_params["page"] = page.lower()
+
 if page == "Evaluation":
     from evals.dashboard import render_dashboard
     render_dashboard()
@@ -71,7 +80,7 @@ with st.sidebar:
     st.markdown("---")
     st.success(f"Logfire: {LOGFIRE_STATUS}")
     st.info(f"Memory ID: {st.session_state.session_id[:8]}")
-    
+
     if st.button("🗑️ Clear History & Memory", use_container_width=True, type="primary"):
         logfire.warning(f"🗑️ Memory Wipe Triggered for session: {st.session_state.session_id}")
         st.session_state.messages = []
@@ -92,7 +101,7 @@ for message in st.session_state.messages:
 if prompt := st.chat_input("Ask about your documentation..."):
     # START TRACE: User Interaction
     with logfire.span("💬 User Chat Interaction", user_query=prompt, session_id=st.session_state.session_id):
-        
+
         st.session_state.messages.append({"role": "user", "content": prompt})
         with st.chat_message("user", avatar=USER_AVATAR):
             st.markdown(prompt)
@@ -111,14 +120,14 @@ if prompt := st.chat_input("Ask about your documentation..."):
                         response = requests.post(url, json=payload, timeout=(10, 240))
                         response.raise_for_status()
                         data = response.json()
-                    
+
                     # Show Reasoning Steps from Backend
                     steps = data.get("thought_process", [])
                     for step in steps:
                         st.write(f"⚙️ {step}")
-                    
+
                     status.update(label="✅ Answer Synthesized", state="complete", expanded=False)
-                    
+
                     # --- SHOW SOURCES ---
                     sources = data.get("sources", [])
                     if sources:
@@ -135,13 +144,13 @@ if prompt := st.chat_input("Ask about your documentation..."):
             # Final Answer Streaming
             answer_placeholder = st.empty()
             full_answer = data.get("answer") or "No response received from the agent."
-            
+
             curr_text = ""
             for char in full_answer:
                 curr_text += char
                 answer_placeholder.markdown(curr_text + "▌")
                 time.sleep(0.005)
-            
+
             answer_placeholder.markdown(full_answer)
             st.session_state.messages.append({"role": "assistant", "content": full_answer})
             logfire.info("✅ Chat cycle completed successfully.")
