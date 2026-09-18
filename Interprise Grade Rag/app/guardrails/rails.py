@@ -1,5 +1,4 @@
 import os
-import re
 import threading
 import logfire
 from langchain_openai import ChatOpenAI
@@ -19,17 +18,6 @@ _BLOCK_RESPONSE = (
     "I can't help with requests that try to override safety instructions or enable exploitation. "
     "I can help with defensive security and enterprise infrastructure questions."
 )
-_PROMPT_INJECTION_PATTERNS = (
-    re.compile(r"\bignore\s+(?:all\s+)?(?:previous|prior)\s+instructions?\b", re.I),
-    re.compile(r"\byou\s+are\s+now\s+dan\b", re.I),
-    re.compile(r"\b(?:jailbreak|bypass)\s+(?:the\s+)?(?:system|guardrails?|safety)\b", re.I),
-)
-_ATTACK_REQUEST_PATTERN = re.compile(
-    r"\b(?:exploit|weaponize|abuse)\b.{0,100}\b"
-    r"(?:sql\s+injection|cross[- ]site\s+scripting|xss|vulnerabilit(?:y|ies)|credentials?)\b",
-    re.I | re.S,
-)
-
 
 def deterministic_block(message: str) -> str | None:
     """Fast defense-in-depth filter for unambiguous prompt injection or exploit requests.
@@ -38,9 +26,21 @@ def deterministic_block(message: str) -> str | None:
     reaching the LLM-based safety gate and deliberately avoids matching defensive
     questions such as "How do I prevent SQL injection?".
     """
-    if any(pattern.search(message) for pattern in _PROMPT_INJECTION_PATTERNS):
+    import re
+
+    prompt_injection_patterns = (
+        r"\bignore\s+(?:all\s+)?(?:previous|prior)\s+instructions?\b",
+        r"\byou\s+are\s+now\s+dan\b",
+        r"\b(?:jailbreak|bypass)\s+(?:the\s+)?(?:system|guardrails?|safety)\b",
+    )
+    if any(re.search(pattern, message, re.I) for pattern in prompt_injection_patterns):
         return _BLOCK_RESPONSE
-    if _ATTACK_REQUEST_PATTERN.search(message):
+
+    attack_pattern = (
+        r"\b(?:exploit|weaponize|abuse)\b.{0,100}\b"
+        r"(?:sql\s+injection|cross[- ]site\s+scripting|xss|vulnerabilit(?:y|ies)|credentials?)\b"
+    )
+    if re.search(attack_pattern, message, re.I | re.S):
         return _BLOCK_RESPONSE
     return None
 
