@@ -1,6 +1,7 @@
 import os
 import uuid
 import json
+from typing import Literal
 from contextlib import asynccontextmanager
 import logfire
 from dotenv import load_dotenv
@@ -13,22 +14,27 @@ from app.config import validate_settings
 from app.agents.graph import rag_agent
 from app.guardrails.rails import initialize_rails, guard
 from app.diagnostics import safe_error_details
+from evals.routes import router as evaluation_router
+from evals.hosted import startup_evaluation
 
 
 @asynccontextmanager
 async def lifespan(app):
     validate_settings()
     initialize_rails()
+    startup_evaluation()
     yield
 
 
 app = FastAPI(title="Enterprise Agentic RAG API", lifespan=lifespan)
+app.include_router(evaluation_router)
 
 
 class QueryRequest(BaseModel):
     q: str = Field(min_length=1, max_length=8000, pattern=r"\S")
     # Omitted thread IDs must never share another visitor's history.
     thread_id: uuid.UUID = Field(default_factory=uuid.uuid4)
+    retrieval_mode: Literal["reranked", "vector"] = "reranked"
 
 
 @app.get("/")
@@ -54,6 +60,7 @@ def query(request: QueryRequest):
     initial_state = {
         "messages": [{"role": "user", "content": request.q}],
         "current_query": request.q, "documents": [],
+        "retrieval_mode": request.retrieval_mode,
         "plan": ["Start"], "status": "Initializing Graph...",
     }
     config = {"configurable": {"thread_id": str(request.thread_id)}}

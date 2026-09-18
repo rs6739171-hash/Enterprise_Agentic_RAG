@@ -45,6 +45,12 @@ st.set_page_config(
 
 require_access()
 
+page = st.sidebar.radio("Workspace", ["Chat", "Evaluation"])
+if page == "Evaluation":
+    from evals.dashboard import render_dashboard
+    render_dashboard()
+    st.stop()
+
 # --- AVATARS ---
 AI_AVATAR = "🤖"
 USER_AVATAR = "👤"

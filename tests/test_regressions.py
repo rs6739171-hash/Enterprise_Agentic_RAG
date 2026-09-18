@@ -96,7 +96,8 @@ class RagRegressions(unittest.TestCase):
         from pydantic import BaseModel, Field, ValidationError
         tree = ast.parse((APP / "app/main.py").read_text())
         node = next(n for n in tree.body if isinstance(n, ast.ClassDef) and n.name == "QueryRequest")
-        scope = {"BaseModel": BaseModel, "Field": Field, "uuid": uuid, "__name__": __name__}
+        from typing import Literal
+        scope = {"BaseModel": BaseModel, "Field": Field, "uuid": uuid, "Literal": Literal, "__name__": __name__}
         exec(compile(ast.fix_missing_locations(ast.Module(body=[node], type_ignores=[])), "request_schema", "exec"), scope)
         request = scope["QueryRequest"]
         self.assertNotEqual(request(q="one").thread_id, request(q="two").thread_id)

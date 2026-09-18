@@ -1,0 +1,9 @@
+# Optional local evaluation environment. Keep RAGAS out of the 512 MB hosted service.
+ragas==0.4.3
+# 0.4.2 removes vertexai.py, which RAGAS 0.4.3 still imports.
+langchain-community==0.4.1
+openai>=1.109.1,<2
+instructor==1.3.2
+python-dotenv>=1,<2
+requests>=2.32,<3
+pydantic>=2,<3

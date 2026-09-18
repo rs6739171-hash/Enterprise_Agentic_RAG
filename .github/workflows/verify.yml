@@ -1,7 +1,7 @@
 name: Verify deployment
 on:
   push:
-    branches: [codex/deployment-readiness-20260916]
+    branches: [main, codex/deployment-readiness-20260916]
   pull_request:
   workflow_dispatch:
 permissions:
@@ -23,3 +23,14 @@ jobs:
         run: python -m unittest discover -s tests -v
       - name: Check Python syntax
         run: python -m compileall -q "Interprise Grade Rag"
+  ragas-adapter:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r "Interprise Grade Rag/requirements-eval.txt"
+      - run: pip check
+      - run: python -m unittest discover -s tests -p test_ragas_adapter.py -v

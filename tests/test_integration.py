@@ -12,7 +12,7 @@ class ApiIntegration(unittest.TestCase):
         import app.gateway.client as gateway
         for config_id in ("", "pc-saved-config"):
             with self.subTest(config_id=config_id):
-                settings = SimpleNamespace(PORTKEY_API_KEY="test", GPT_SLUG="rag1",
+                settings = SimpleNamespace(OPENAI_API_KEY="", PORTKEY_API_KEY="test", GPT_SLUG="rag1",
                     OPENAI_MODEL="gpt-5.5", PORTKEY_CONFIG_ID=config_id)
                 gateway.get_portkey_client.cache_clear()
                 with patch.object(gateway, "settings", settings), \
