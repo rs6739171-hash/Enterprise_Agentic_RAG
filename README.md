@@ -10,9 +10,9 @@ A personal GenAI engineering project by Rishabh Shukla. It answers technical que
 
 - A LangGraph planner routes conversational requests directly to a responder and technical requests through retrieval.
 - Qdrant returns 15 vector candidates; FlashRank scores one candidate at a time to bound inference memory and selects 5 chunks for generation. A vector-only top-5 mode provides an evaluation baseline.
-- NeMo input guardrails run before the graph. Provider failures return a sanitized HTTP 503 rather than a successful empty answer.
+- A deterministic defense-in-depth filter blocks obvious prompt-injection and exploit requests before NeMo Guardrails. NeMo still handles the broader input-safety gate. If the safety service degrades, the API fails closed with a safe blocked response and marks the event as `degraded_fail_closed` rather than calling the RAG graph.
 - FastAPI runs on loopback; Streamlit is the public, password-protected interface. Each chat and evaluation question gets an isolated thread ID.
-- The Evaluation page captures complete live answers and contexts, rubric scores, latency, guardrail outcomes, errors and a JSON/CSV export.
+- The Evaluation page captures complete live answers and contexts, rubric scores, latency, safety outcomes, block source (`guardrails`, `model_refusal`, or `degraded_fail_closed`), errors and a JSON/CSV export.
 - Optional local RAGAS scoring uses the saved outputs and separate dependencies. Hosted rubric results are never labelled RAGAS.
 
 This is a portfolio prototype, not a production certification. The graph is a routed workflow, not a self-correcting loop. Conversation checkpoints and hosted evaluation reports are in process/local storage and do not survive all restarts or deploys. It has not been load tested.
@@ -39,7 +39,7 @@ The existing collection must match `EMBEDDING_MODEL` and `EMBEDDING_DIM`. To cre
 
 ## Evaluation
 
-In the live app, enter the demo password, choose **Evaluation**, select 3, 5 or 15 questions and optionally enable the vector-only comparison. One background job runs at a time. Queries are serialized on the memory-constrained host. Each run also executes all 6 guardrail cases.
+In the live app, enter the demo password, choose **Evaluation**, select 3, 5 or 15 questions and optionally enable the vector-only comparison. One background job runs at a time. Queries are serialized on the memory-constrained host. Each run also executes all 6 safety cases and keeps transport failures or fail-closed degradation separate from ordinary blocked/pass classifications.
 
 The hosted judge produces four 0–1 rubric estimates: faithfulness, answer relevance, context relevance and answer correctness. These are **not RAGAS metrics**. The report includes the sample counts and failures, dataset hash, model names, commit, full answers and retrieved evidence. It does not replace missing retrieval with reference evidence or silently shorten answers.
 
@@ -70,7 +70,7 @@ python -m unittest discover -s tests -v
 python -m compileall -q "Interprise Grade Rag"
 ```
 
-Tests exercise request isolation, full-output capture, no reference-context substitution, baseline routing, failed guardrail requests, judge failures, provider errors, seeding and guardrail initialization. GitHub Actions also checks dependency compatibility. The optional RAGAS adapter smoke test runs when its dependencies are installed.
+Tests exercise request isolation, full-output capture, no reference-context substitution, baseline routing, deterministic adversarial blocking, safe-refusal attribution, degraded fail-closed reporting, judge failures, provider errors, seeding and guardrail initialization. GitHub Actions also checks dependency compatibility. The optional RAGAS adapter smoke test runs when its dependencies are installed.
 
 ## Deployment
 
