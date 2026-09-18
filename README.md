@@ -9,7 +9,7 @@ A personal GenAI engineering project by Rishabh Shukla. It answers technical que
 ## What is implemented
 
 - A LangGraph planner routes conversational requests directly to a responder and technical requests through retrieval.
-- Qdrant returns 15 vector candidates; FlashRank selects 5 chunks for generation. A vector-only top-5 mode provides an evaluation baseline.
+- Qdrant returns 15 vector candidates; FlashRank scores one candidate at a time to bound inference memory and selects 5 chunks for generation. A vector-only top-5 mode provides an evaluation baseline.
 - NeMo input guardrails run before the graph. Provider failures return a sanitized HTTP 503 rather than a successful empty answer.
 - FastAPI runs on loopback; Streamlit is the public, password-protected interface. Each chat and evaluation question gets an isolated thread ID.
 - The Evaluation page captures complete live answers and contexts, rubric scores, latency, guardrail outcomes, errors and a JSON/CSV export.
@@ -35,11 +35,11 @@ python serve.py
 
 Open the Streamlit URL printed by the launcher. Required settings: `GEMINI_API_KEY`, `QDRANT_CLUSTER_ENDPOINT`, `QDRANT_API_KEY`, and either `OPENAI_API_KEY` or Portkey credentials/config. Set `APP_PASSWORD` for hosted use. Hosted evaluation additionally needs `OPENAI_API_KEY`; it uses `EVAL_JUDGE_MODEL` (default `gpt-4o-mini`). No keys belong in Git.
 
-The existing collection must match `EMBEDDING_MODEL` and `EMBEDDING_DIM`. To create the supplied public-document collection when missing, use `RAG_SEED_ON_START=1`; the seed routine preserves an existing collection. Do not change embedding models against an existing vector space.
+The existing collection must match `EMBEDDING_MODEL` and `EMBEDDING_DIM`. To create the supplied public-document collection when missing, use `RAG_SEED_IF_MISSING=1`; the seed routine preserves an existing collection. Do not change embedding models against an existing vector space.
 
 ## Evaluation
 
-In the live app, enter the demo password, choose **Evaluation**, select 3, 5 or 15 questions and optionally enable the vector-only comparison. One background job runs at a time. Each run also executes all 6 guardrail cases.
+In the live app, enter the demo password, choose **Evaluation**, select 3, 5 or 15 questions and optionally enable the vector-only comparison. One background job runs at a time. Queries are serialized on the memory-constrained host. Each run also executes all 6 guardrail cases.
 
 The hosted judge produces four 0–1 rubric estimates: faithfulness, answer relevance, context relevance and answer correctness. These are **not RAGAS metrics**. The report includes the sample counts and failures, dataset hash, model names, commit, full answers and retrieved evidence. It does not replace missing retrieval with reference evidence or silently shorten answers.
 

@@ -11,7 +11,7 @@ BASE_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8000").rstrip("/")
 
 def render_dashboard():
     st.title("RAG evaluation")
-    st.write("Run the Kubernetes question set against the deployed assistant and inspect complete answers, retrieved evidence and failures.")
+    st.write("Run the technical documentation question set against the deployed assistant and inspect complete answers, retrieved evidence and failures.")
     st.caption("Hosted scores use an LLM rubric, not RAGAS. The optional local RAGAS runner is documented in the repository.")
     limit = st.selectbox("Questions per retrieval mode", [3, 5, 15], index=0)
     compare = st.checkbox("Compare with vector search without reranking", value=False)

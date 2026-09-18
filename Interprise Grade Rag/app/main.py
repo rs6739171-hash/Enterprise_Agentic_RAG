@@ -1,6 +1,7 @@
 import os
 import uuid
 import json
+import threading
 from typing import Literal
 from contextlib import asynccontextmanager
 import logfire
@@ -28,6 +29,7 @@ async def lifespan(app):
 
 app = FastAPI(title="Enterprise Agentic RAG API", lifespan=lifespan)
 app.include_router(evaluation_router)
+_query_lock = threading.Lock()
 
 
 class QueryRequest(BaseModel):
@@ -57,27 +59,29 @@ def graph_image():
 
 @app.post("/query")
 def query(request: QueryRequest):
-    initial_state = {
-        "messages": [{"role": "user", "content": request.q}],
-        "current_query": request.q, "documents": [],
-        "retrieval_mode": request.retrieval_mode,
-        "plan": ["Start"], "status": "Initializing Graph...",
-    }
-    config = {"configurable": {"thread_id": str(request.thread_id)}}
-    try:
-        fired, response = guard(request.q)
-        if fired:
-            return {"question": request.q, "answer": response,
-                    "thought_process": ["Intent: Guardrails Fired", "Retrieval: Skipped"],
-                    "status": "Handled by guardrails.", "sources": []}
-        result = rag_agent.invoke(initial_state, config=config)
-        return {"question": request.q, "answer": result.get("final_answer"),
-                "thought_process": result.get("plan"), "status": result.get("status"),
-                "sources": result.get("documents", [])}
-    except Exception as exc:
-        # Include safe fields in the message so Render's text logs retain them.
-        logfire.error("RAG request failed: {details}", details=json.dumps(safe_error_details(exc)))
-        raise HTTPException(status_code=503, detail="The AI or knowledge service is temporarily unavailable.") from exc
+    # Bound memory use and serialize NeMo lazy index initialization.
+    with _query_lock:
+        initial_state = {
+            "messages": [{"role": "user", "content": request.q}],
+            "current_query": request.q, "documents": [],
+            "retrieval_mode": request.retrieval_mode,
+            "plan": ["Start"], "status": "Initializing Graph...",
+        }
+        config = {"configurable": {"thread_id": str(request.thread_id)}}
+        try:
+            fired, response = guard(request.q)
+            if fired:
+                return {"question": request.q, "answer": response,
+                        "thought_process": ["Intent: Guardrails Fired", "Retrieval: Skipped"],
+                        "status": "Handled by guardrails.", "sources": []}
+            result = rag_agent.invoke(initial_state, config=config)
+            return {"question": request.q, "answer": result.get("final_answer"),
+                    "thought_process": result.get("plan"), "status": result.get("status"),
+                    "sources": result.get("documents", [])}
+        except Exception as exc:
+            # Include safe fields in the message so Render's text logs retain them.
+            logfire.error("RAG request failed: {details}", details=json.dumps(safe_error_details(exc)))
+            raise HTTPException(status_code=503, detail="The AI or knowledge service is temporarily unavailable.") from exc
 
 
 if __name__ == "__main__":

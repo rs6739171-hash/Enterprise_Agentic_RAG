@@ -1,3 +1,5 @@
+import os
+import threading
 import logfire
 from langchain_openai import ChatOpenAI
 from nemoguardrails import RailsConfig, LLMRails
@@ -9,6 +11,7 @@ from app.guardrails.colang_rules import COLANG_CONTENT, YAML_CONTENT, RAIL_INDIC
 
 
 _rails: LLMRails | None = None
+_guard_lock = threading.Lock()
 
 
 def initialize_rails() -> None:
@@ -38,9 +41,12 @@ def initialize_rails() -> None:
         # Its ONNX session can exceed the shared 512 MB web-service budget.
         # Keep semantic intent matching and every Colang flow, using the same
         # remote embedding provider that already processes retrieval queries.
+        # Keep credentials out of RailsConfig reprs and exception logs.
+        if settings.GEMINI_API_KEY:
+            os.environ["GOOGLE_API_KEY"] = settings.GEMINI_API_KEY
         config.models.append(Model(
             type="embeddings", engine="google", model=settings.EMBEDDING_MODEL,
-            parameters={"api_key": settings.GEMINI_API_KEY},
+            parameters={},
         ))
 
         _rails = LLMRails(config, llm=guard_llm)
@@ -64,11 +70,14 @@ def guard(message: str) -> tuple[bool, str | None]:
     if _rails is None:
         raise RuntimeError("Guardrails are unavailable; requests are disabled.")
 
-    with logfire.span("🛡️ Guardrails Check"):
+    with _guard_lock, logfire.span("🛡️ Guardrails Check"):
         result = _rails.generate(messages=[{"role": "user", "content": message}])
 
         # NeMo returns {'role': 'assistant', 'content': '...'} — extract text
         content = result.get("content", "") if isinstance(result, dict) else str(result)
+
+        if not content.strip() or "internal server error" in content.lower() or "internal error" in content.lower():
+            raise RuntimeError("Guardrails could not complete the check.")
 
         fired = any(indicator in content for indicator in RAIL_INDICATORS)
 

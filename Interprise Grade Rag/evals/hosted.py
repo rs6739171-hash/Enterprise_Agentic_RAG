@@ -109,7 +109,7 @@ def run_evaluation(limit=3, compare_baseline=False, progress=None, judge=score_s
             rows.append(row)
             report["summary"][mode] = summarize(rows)
             if os.getenv("EVAL_LOG_RESULTS") == "1":
-                print("EVAL_SAMPLE_JSON " + json.dumps({"mode": mode, "sample": row}, ensure_ascii=True), flush=True)
+                print("EVAL_SAMPLE_JSON " + json.dumps({"run_id": report["run_id"], "mode": mode, "sample": row}, ensure_ascii=True), flush=True)
             if progress:
                 progress(report)
     report["guardrails"] = run_guardrails_eval(golden["guardrails_samples"])
@@ -161,6 +161,13 @@ def startup_evaluation():
     if not commit or os.getenv("EVAL_RUN_COMMIT") != commit:
         return
     def ready():
+        # Do not automatically repeat a costly run after a process restart.
+        marker = Path("/tmp") / ("rag-evaluation-started-" + commit)
+        try:
+            with marker.open("x") as handle:
+                handle.write(commit)
+        except FileExistsError:
+            return
         import requests
         for _ in range(90):
             try:

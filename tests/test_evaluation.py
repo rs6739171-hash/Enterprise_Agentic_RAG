@@ -21,6 +21,33 @@ def response(answer="answer", sources=None, steps=None):
 
 
 class EvaluationRegressionTests(unittest.TestCase):
+    def test_reranker_bounds_batches_and_preserves_global_order(self):
+        import threading
+        from helpers import functions_from
+        root = Path(__file__).resolve().parents[1] / "Interprise Grade Rag"
+        ranker = Mock()
+        ranker.rerank.side_effect = lambda request: [{**request.passages[0], "score": float(request.passages[0]["text"])}]
+        fn = functions_from(root / "app/services/retrieval/ranking_service.py",
+            _ranker=ranker, _ranker_lock=threading.Lock(), RerankRequest=lambda **kwargs: SimpleNamespace(**kwargs),
+            logfire=SimpleNamespace(error=lambda *a, **k: None))
+        result = fn["rerank_documents"]("q", ["1", "3", "2"], 2)
+        self.assertEqual(result, ["3", "2"])
+        self.assertTrue(all(len(call.args[0].passages) == 1 for call in ranker.rerank.call_args_list))
+        ranker.rerank.side_effect = RuntimeError("model failed")
+        with self.assertRaises(RuntimeError):
+            fn["rerank_documents"]("q", ["1"])
+
+    def test_guard_internal_error_fails_closed(self):
+        import contextlib
+        import threading
+        from helpers import functions_from
+        fn = functions_from(Path(__file__).resolve().parents[1] / "Interprise Grade Rag/app/guardrails/rails.py",
+            _rails=SimpleNamespace(generate=lambda **kwargs: {"content": "Internal server error."}),
+            _guard_lock=threading.Lock(), RAIL_INDICATORS=[],
+            logfire=SimpleNamespace(span=lambda *a, **k: contextlib.nullcontext()))
+        with self.assertRaises(RuntimeError):
+            fn["guard"]("q")
+
     def test_complete_outputs_and_isolated_threads(self):
         post = Mock(return_value=response("a" * 1000, ["evidence" * 500] * 5))
         first = query_sample("question", post=post)
