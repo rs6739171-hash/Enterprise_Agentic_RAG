@@ -53,7 +53,8 @@ page = st.sidebar.radio(
     ["Chat", "Evaluation"],
     index=1 if default_page == "Evaluation" else 0,
 )
-st.query_params["page"] = page.lower()
+if requested_page != page.lower():
+    st.query_params["page"] = page.lower()
 
 if page == "Evaluation":
     from evals.dashboard import render_dashboard
