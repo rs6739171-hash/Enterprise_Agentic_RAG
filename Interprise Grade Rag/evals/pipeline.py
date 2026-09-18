@@ -12,7 +12,7 @@ REQUEST_TIMEOUT = 240
 
 def detect_tool(thought_process):
     steps = " ".join(str(x) for x in (thought_process or [])).lower()
-    if "guardrails fired" in steps:
+    if "guardrails fired" in steps or "guardrails fail-closed" in steps:
         return "guardrails"
     if any(x in steps for x in ("intent: technical", "search term:", "context retrieved")):
         return "retrieve_documents"
@@ -23,7 +23,8 @@ def detect_tool(thought_process):
 def query_sample(question, retrieval_mode="reranked", post=None):
     start = time.perf_counter()
     result = {"actual_response": "", "actual_contexts": [], "actual_tools_called": [],
-              "status": "error", "error": None, "retrieval_mode": retrieval_mode}
+              "status": "error", "error": None, "retrieval_mode": retrieval_mode,
+              "guardrail_status": None}
     try:
         response = (post or requests.post)(API_URL,
             json={"q": question, "thread_id": str(uuid.uuid4()), "retrieval_mode": retrieval_mode},
@@ -36,7 +37,8 @@ def query_sample(question, retrieval_mode="reranked", post=None):
         if not isinstance(sources, list) or any(not isinstance(s, str) for s in sources):
             raise ValueError("invalid_sources")
         result.update(actual_response=answer, actual_contexts=sources,
-            actual_tools_called=[detect_tool(data.get("thought_process"))], status="success")
+            actual_tools_called=[detect_tool(data.get("thought_process"))],
+            guardrail_status=data.get("guardrail_status"), status="success")
     except Exception as exc:
         result["error"] = type(exc).__name__
         status = getattr(getattr(exc, "response", None), "status_code", None)
