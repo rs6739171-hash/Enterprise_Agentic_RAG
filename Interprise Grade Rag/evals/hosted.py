@@ -95,7 +95,8 @@ def run_evaluation(limit=3, compare_baseline=False, progress=None, judge=score_s
         "limitations": ["Small developer-authored test set, not an independent benchmark.",
             "LLM rubric estimates are not RAGAS metrics or a security guarantee.",
             "Latency is API round-trip time; generation cost is not instrumented.",
-            "Baseline and reranked runs can differ due to model nondeterminism."],
+            "Baseline and reranked runs can differ due to model nondeterminism.",
+            "Safety blocks are attributed by source; fail-closed degradations remain evaluation errors."],
         "runs": {}, "guardrails": [], "summary": {}}
     for mode in (["reranked", "vector"] if compare_baseline else ["reranked"]):
         rows = report["runs"][mode] = []
@@ -118,6 +119,7 @@ def run_evaluation(limit=3, compare_baseline=False, progress=None, judge=score_s
         print("EVAL_GUARDRAILS_JSON " + json.dumps(report["guardrails"], ensure_ascii=True), flush=True)
     complete = all(s["request_errors"] == 0 and s["judge_errors"] == 0 for s in report["summary"].values())
     complete = complete and report["guardrails_summary"]["error"] == 0
+    complete = complete and report["guardrails_summary"]["degraded_fail_closed"] == 0
     report["status"] = "completed" if complete else "completed_with_errors"
     report["finished_at"] = datetime.now(timezone.utc).isoformat()
     if progress:
