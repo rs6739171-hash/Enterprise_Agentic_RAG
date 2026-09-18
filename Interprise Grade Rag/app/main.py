@@ -69,15 +69,46 @@ def query(request: QueryRequest):
         }
         config = {"configurable": {"thread_id": str(request.thread_id)}}
         try:
-            fired, response = guard(request.q)
+            try:
+                fired, response = guard(request.q)
+            except Exception as exc:
+                # Fail closed without turning a safety-gate outage into an unsafe
+                # downstream RAG call. Keep the degradation visible to evaluation.
+                logfire.error(
+                    "Guardrails unavailable; request blocked: {details}",
+                    details=json.dumps(safe_error_details(exc)),
+                )
+                return {
+                    "question": request.q,
+                    "answer": (
+                        "I can't process this request safely right now because the safety gate "
+                        "is temporarily unavailable. Please retry with a clearly scoped enterprise IT question."
+                    ),
+                    "thought_process": ["Intent: Guardrails Fail-Closed", "Retrieval: Skipped"],
+                    "status": "Blocked because the safety gate was unavailable.",
+                    "sources": [],
+                    "guardrail_status": "degraded_fail_closed",
+                }
+
             if fired:
-                return {"question": request.q, "answer": response,
-                        "thought_process": ["Intent: Guardrails Fired", "Retrieval: Skipped"],
-                        "status": "Handled by guardrails.", "sources": []}
+                return {
+                    "question": request.q,
+                    "answer": response,
+                    "thought_process": ["Intent: Guardrails Fired", "Retrieval: Skipped"],
+                    "status": "Handled by guardrails.",
+                    "sources": [],
+                    "guardrail_status": "blocked",
+                }
+
             result = rag_agent.invoke(initial_state, config=config)
-            return {"question": request.q, "answer": result.get("final_answer"),
-                    "thought_process": result.get("plan"), "status": result.get("status"),
-                    "sources": result.get("documents", [])}
+            return {
+                "question": request.q,
+                "answer": result.get("final_answer"),
+                "thought_process": result.get("plan"),
+                "status": result.get("status"),
+                "sources": result.get("documents", []),
+                "guardrail_status": "passed",
+            }
         except Exception as exc:
             # Include safe fields in the message so Render's text logs retain them.
             logfire.error("RAG request failed: {details}", details=json.dumps(safe_error_details(exc)))
