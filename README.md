@@ -2,9 +2,9 @@
 
 Python / FastAPI / Streamlit / LangGraph / Qdrant / Gemini embeddings / FlashRank / NeMo Guardrails
 
-[Live demo](https://enterprise-rag-rishabh.onrender.com/) · [Portfolio and demo access](https://my-portfolio-website-topaz-beta.vercel.app/)
+[Live chat demo](https://enterprise-rag-rishabh.onrender.com/?page=chat) · [Live evaluation app](https://enterprise-rag-rishabh.onrender.com/?page=evaluation) · [Portfolio and demo access](https://my-portfolio-website-topaz-beta.vercel.app/)
 
-A personal GenAI engineering project by Rishabh Shukla. It answers technical questions using retrieved Kubernetes documentation, shows the retrieved chunks, and includes an evaluation dashboard. The hosted demo is password protected and may need time to wake up.
+A personal GenAI engineering project by Rishabh Shukla. It answers technical questions using retrieved Kubernetes documentation, shows the retrieved chunks, and includes a directly bookmarkable evaluation application. The hosted demo is password protected and may need time to wake up.
 
 ## What is implemented
 
@@ -12,7 +12,8 @@ A personal GenAI engineering project by Rishabh Shukla. It answers technical que
 - Qdrant returns 15 vector candidates; FlashRank scores one candidate at a time to bound inference memory and selects 5 chunks for generation. A vector-only top-5 mode provides an evaluation baseline.
 - A deterministic defense-in-depth filter blocks obvious prompt-injection and exploit requests before NeMo Guardrails. NeMo still handles the broader input-safety gate. If the safety service degrades, the API fails closed with a safe blocked response and marks the event as `degraded_fail_closed` rather than calling the RAG graph.
 - FastAPI runs on loopback; Streamlit is the public, password-protected interface. Each chat and evaluation question gets an isolated thread ID.
-- The Evaluation page captures complete live answers and contexts, rubric scores, latency, safety outcomes, block source (`guardrails`, `model_refusal`, or `degraded_fail_closed`), errors and a JSON/CSV export.
+- The Evaluation application runs 3, 5 or all 15 RAG questions, optionally compares reranked retrieval with the vector-only baseline, executes all 6 safety cases, and displays rubric scores, latency, block attribution, complete answers, retrieved contexts and errors.
+- Evaluation reports can be exported as complete JSON or summary CSV.
 - Optional local RAGAS scoring uses the saved outputs and separate dependencies. Hosted rubric results are never labelled RAGAS.
 
 This is a portfolio prototype, not a production certification. The graph is a routed workflow, not a self-correcting loop. Conversation checkpoints and hosted evaluation reports are in process/local storage and do not survive all restarts or deploys. It has not been load tested.
@@ -37,11 +38,22 @@ Open the Streamlit URL printed by the launcher. Required settings: `GEMINI_API_K
 
 The existing collection must match `EMBEDDING_MODEL` and `EMBEDDING_DIM`. To create the supplied public-document collection when missing, use `RAG_SEED_IF_MISSING=1`; the seed routine preserves an existing collection. Do not change embedding models against an existing vector space.
 
-## Evaluation
+## Evaluation application
 
-In the live app, enter the demo password, choose **Evaluation**, select 3, 5 or 15 questions and optionally enable the vector-only comparison. One background job runs at a time. Queries are serialized on the memory-constrained host. Each run also executes all 6 safety cases and keeps transport failures or fail-closed degradation separate from ordinary blocked/pass classifications.
+Open the [live evaluation app](https://enterprise-rag-rishabh.onrender.com/?page=evaluation), enter the demo password, then choose 3, 5 or all 15 questions. Enable the vector-only comparison to run the same set without FlashRank reranking. One background job runs at a time, and the dashboard refreshes automatically while it is running.
 
-The hosted judge produces four 0–1 rubric estimates: faithfulness, answer relevance, context relevance and answer correctness. These are **not RAGAS metrics**. The report includes the sample counts and failures, dataset hash, model names, commit, full answers and retrieved evidence. It does not replace missing retrieval with reference evidence or silently shorten answers.
+Each run also executes all 6 safety cases and keeps transport failures or fail-closed degradation separate from ordinary blocked/pass classifications. The dashboard exposes:
+
+- four hosted quality rubric scores: faithfulness, answer relevance, context relevance and answer correctness;
+- response and judge error counts;
+- exact tool-routing match;
+- p50 and p95 API latency;
+- safety precision, recall, accuracy and coverage;
+- block source attribution;
+- complete model answers and retrieved contexts;
+- JSON and CSV downloads.
+
+The hosted judge produces 0–1 rubric estimates. These are **not RAGAS metrics**. The report includes the sample counts and failures, dataset hash, model names, commit, full answers and retrieved evidence. It does not replace missing retrieval with reference evidence or silently shorten answers.
 
 Latency is API round-trip time, excluding judge time. Judge token usage is recorded when supplied by the provider; total generation cost is not instrumented. The 15 developer-authored questions are a small functional test set, not independent evidence of general reliability. Compare reranking as an experiment; no quality improvement is assumed.
 
