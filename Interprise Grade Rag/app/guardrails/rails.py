@@ -1,4 +1,5 @@
 import os
+import re
 import threading
 import logfire
 from langchain_openai import ChatOpenAI
@@ -12,6 +13,36 @@ from app.guardrails.colang_rules import COLANG_CONTENT, YAML_CONTENT, RAIL_INDIC
 
 _rails: LLMRails | None = None
 _guard_lock = threading.Lock()
+
+_BLOCK_RESPONSE = (
+    "I'm an Enterprise IT Assistant focused on Kubernetes, Intel hardware, and networking. "
+    "I can't help with requests that try to override safety instructions or enable exploitation. "
+    "I can help with defensive security and enterprise infrastructure questions."
+)
+_PROMPT_INJECTION_PATTERNS = (
+    re.compile(r"\bignore\s+(?:all\s+)?(?:previous|prior)\s+instructions?\b", re.I),
+    re.compile(r"\byou\s+are\s+now\s+dan\b", re.I),
+    re.compile(r"\b(?:jailbreak|bypass)\s+(?:the\s+)?(?:system|guardrails?|safety)\b", re.I),
+)
+_ATTACK_REQUEST_PATTERN = re.compile(
+    r"\b(?:exploit|weaponize|abuse)\b.{0,100}\b"
+    r"(?:sql\s+injection|cross[- ]site\s+scripting|xss|vulnerabilit(?:y|ies)|credentials?)\b",
+    re.I | re.S,
+)
+
+
+def deterministic_block(message: str) -> str | None:
+    """Fast defense-in-depth filter for unambiguous prompt injection or exploit requests.
+
+    This does not replace NeMo Guardrails. It prevents known adversarial patterns from
+    reaching the LLM-based safety gate and deliberately avoids matching defensive
+    questions such as "How do I prevent SQL injection?".
+    """
+    if any(pattern.search(message) for pattern in _PROMPT_INJECTION_PATTERNS):
+        return _BLOCK_RESPONSE
+    if _ATTACK_REQUEST_PATTERN.search(message):
+        return _BLOCK_RESPONSE
+    return None
 
 
 def initialize_rails() -> None:
@@ -54,19 +85,22 @@ def initialize_rails() -> None:
     except Exception as e:
         _rails = None
         raise RuntimeError("Guardrails initialization failed; requests are disabled.") from e
-    
-    
 
 
 def guard(message: str) -> tuple[bool, str | None]:
     """
-    Run a user message through the NeMo rails gate.
+    Run a user message through the deterministic pre-filter and NeMo rails gate.
 
     Returns:
-        (True,  rail_response) — a rail fired; return this response immediately,
-                                skip the RAG pipeline entirely.
-        (False, None)          — message is clean; proceed to LangGraph.
+        (True, rail_response) — a safety gate fired; return this response immediately
+                               and skip the RAG pipeline entirely.
+        (False, None)         — message is clean; proceed to LangGraph.
     """
+    preflight = deterministic_block(message)
+    if preflight:
+        logfire.info("🛡️ Deterministic guardrail fired.")
+        return True, preflight
+
     if _rails is None:
         raise RuntimeError("Guardrails are unavailable; requests are disabled.")
 
@@ -82,7 +116,7 @@ def guard(message: str) -> tuple[bool, str | None]:
         fired = any(indicator in content for indicator in RAIL_INDICATORS)
 
         if fired:
-            logfire.info(f"🛡️ Guardrails fired | query='{message[:80]}'")
+            logfire.info("🛡️ NeMo guardrails fired.")
             return True, content
 
         logfire.info("✅ Guardrails passed.")
