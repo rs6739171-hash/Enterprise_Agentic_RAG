@@ -6,6 +6,13 @@ Python / FastAPI / Streamlit / LangGraph / Qdrant / Gemini embeddings / FlashRan
 
 A personal GenAI engineering project by Rishabh Shukla. It answers technical questions using retrieved Kubernetes documentation, shows the retrieved chunks, and includes a directly bookmarkable evaluation application. The hosted demo is password protected and may need time to wake up.
 
+## Recruiter quick scan
+
+- **RAG engineering:** LangGraph routing, Qdrant semantic retrieval, FlashRank reranking, Gemini embeddings and grounded generation.
+- **Reliability & safety:** deterministic prompt-injection filtering, NeMo Guardrails, fail-closed behavior, request isolation and regression tests.
+- **Evaluation:** a hosted evaluation application covering up to 15 RAG questions plus 6 safety cases, with quality rubrics, latency, routing and exportable reports.
+- **Delivery:** FastAPI, Streamlit, GitHub Actions and Render deployment configuration.
+
 ## What is implemented
 
 - A LangGraph planner routes conversational requests directly to a responder and technical requests through retrieval.
@@ -23,8 +30,8 @@ This is a portfolio prototype, not a production certification. The graph is a ro
 Python 3.12 or 3.13:
 
 ```bash
-git clone https://github.com/rs6739171-hash/Interprise_Grade_Rag_Application.git
-cd Interprise_Grade_Rag_Application
+git clone https://github.com/rs6739171-hash/Enterprise_Agentic_RAG.git
+cd Enterprise_Agentic_RAG
 python -m venv .venv
 source .venv/bin/activate
 pip install -r "Interprise Grade Rag/requirements-runtime.txt"
